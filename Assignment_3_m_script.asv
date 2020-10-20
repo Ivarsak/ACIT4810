@@ -1,0 +1,256 @@
+%%%%%%%%%%%%%%%
+%CSTR Seborg et al (2017) 
+%Example 2.5 page 20 
+%Assignment1
+%%%%%%%%%%%%%%%%
+%clear the workspace
+clear
+
+%% Declaring Constant parameters and variables
+
+%constant parameters of the model
+V=100;       %L original value 100L
+rhoo=1000;	%g/L
+C=0.239;     %J/(gK)
+dHR=5*10^4;	%J/mol
+ER=8750;     %K
+k0=7.2005*10^10; %min-1 
+UA=5*10^4;	%J/(minK)
+
+%variables of the model
+
+%DVs
+cAi0=1;	%mol/L
+Ti0=350;	%K
+%MVs
+%Chech the flow rate qi! hold up 1 min!
+qi0=100;  %L/min original qi=100 Ttank=325 try q=10 Ttank=305
+Tc0=300;	%K
+%CVs
+T0=324.5;	%K original 350
+cA0=0.8771;	%mol/L original 0.5
+
+%% Equilibrium values 
+
+%validation of values
+%in equilibrium dcA/dt=0
+k0eq=exp(ER/T0);
+%in equilibrium dT/dt=0
+dHReq=UA*(T0-Tc0)/(V*k0*cA0*exp(-ER/T0));
+
+%% Test procedure
+%test procedure
+%start simulation
+t0=0;
+%decrease 
+t1=30;
+%bring back to nominal
+t2=60;
+%increase
+t3=90;
+%bring back to nominal
+t4=120;
+%end simulation
+t5=150;
+
+%changes in cooling medium temperature Tc
+Tc1=-2; %K
+Tc2=+2; %K
+Tc3=+2; %K 
+Tc4=-2; %K
+
+%changes in inlet volume flow qi
+qi1=-10; %L/min
+qi2=+10; %L/min
+qi3=+10; %L/min
+qi4=-10; %L/min
+
+%changes in inlet temperature Ti
+Ti1=-5;
+Ti2=+5;
+Ti3=+5;
+Ti4=-5;
+
+%changes in inlet concentration cAi
+cAi1=-0.05; %L/min
+cAi2=+0.05; %L/min
+cAi3=+0.05; %L/min
+cAi4=-0.05; %L/min
+
+
+%Setpoint temperature
+Tsp1=-2;
+Tsp2=+2;
+Tsp3=+2;
+Tsp4=-2;
+
+
+%Setpoint inlet concentration
+cAsp1=-0.05;
+cAsp2=+0.05;
+cAsp3=+0.05;
+cAsp4=-0.05;
+
+%% Linearized model in state space
+%linearized model in state space format
+%output-input model dx/dt=Am*x+Bm*u
+%output coefficients
+a11=-qi0/V-k0*exp(-ER/T0);
+a12=-k0*cA0*(ER/(T0^2))*exp(-ER/T0);
+a21=dHR*k0*exp(-ER/T0)/(rhoo*C);
+a22=-qi0/V+dHR/rhoo*C*k0*(ER/(T0^2))*exp(-ER/T0)*cA0-UA/(V*rhoo*C);
+%output coefficient matrix
+Am=[a11 a12;a21 a22];
+%input coefficients
+b11=0;
+b12=cAi0-cA0;
+b13=qi0/V;
+b14=0;
+b21=UA/(V*rhoo*C);
+b22=(Ti0-T0)/V;
+b23=0;
+b24=qi0/V;
+%input coefficient matrix
+Bm=[b11 b12 b13 b14; b21 b22 b23 b24];
+%assume that measurements y=Cm*x+Dm*u where C is matrix of ones and D=0;
+Cm=[1 0;0 1];
+Dm=0;
+%state-space model of the linearized model
+CSTRsys1=ss(Am,Bm,Cm,Dm);
+
+%% Transfer function model from assignment 2
+
+%Numerators (gains Kp) 
+Tc_T_num = 1.818;
+Tc_cA_num = -1.687*10^-2;
+q_T_num = 0.240;
+q_cA_num = -1.074*10^-3;
+cAi_T_num = 23.582;
+cAi_cA_num = 0.662;
+Ti_T_num = 0.738;
+Ti_cA_num = -6.099*10^-3;
+
+%Denominators (Time constant tau)
+Tc_T_den = [8.317 1];
+Tc_cA_den = [15.073 1];
+q_T_den = [8.339 1];
+q_cA_den = [11.762 1];
+cAi_T_den = [16.216 1];
+cAi_cA_den = [6.108 1];
+Ti_T_den = [7.297 1];
+Ti_cA_den = [15.755 1];
+
+%Creating transfer functions with time delay
+Tc_T = tf(Tc_T_num, Tc_T_den, 'IODelay', 0.205)
+Tc_cA = tf(Tc_cA_num, Tc_cA_den, 'IODelay', 2.782)
+q_T = tf(q_T_num, q_T_den, 'IODelay', 0.889)
+q_cA = tf(q_cA_num, q_cA_den, 'IODelay', 12.672)
+cAi_T = tf(cAi_T_num, cAi_T_den, 'IODelay', 1.896)
+cAi_cA = tf(cAi_cA_num, cAi_cA_den, 'IODelay', 0.194)
+Ti_T = tf(Ti_T_num, Ti_T_den, 'IODelay', 0.635)
+Ti_cA = tf(Ti_cA_num, Ti_cA_den, 'IODelay', 4.616)
+
+plant = [Tc_T Ti_T q_T cAi_T;
+   Tc_cA Ti_cA q_cA cAi_cA];
+      
+       
+ 
+ %% Relative Gain Array
+ M1 = [Tc_T_num q_T_num;
+     Tc_cA_num q_cA_num];
+ 
+ M2 = [Tc_T_num Ti_T_num;
+     Tc_cA_num Ti_cA_num];
+ 
+ lamda1 = 1/(1-det(M1))
+ lamda2 = 1/(1-det(M2))
+ 
+ %% Tuning variables for the PID controller   
+ tc1 = 4;
+[K_T ,T_T] = skogestad(Tc_T_num, Tc_T_den(1), Tc_T.IODelay, tc1)
+[K_cA,T_cA] = skogestad(q_cA_num, q_cA_den(1), q_cA.IODelay, tc1)
+
+    
+%first loop Tc and T
+Kp1 = 1.818;
+Tp1 = 8.317;
+Td1 = 0.205;
+tc1 = 4;
+Kc1_pid = Tp1/(Kp1*tc1+Td1);
+Ti1_pid = min(Tp1, 4*(tc1+Td1));
+
+
+%second loop Ca and q
+Kp2 = -1.074;
+Tp2 = 11.76;
+Td2 = 12.672;
+tc2 = 4;
+Kc2_pid = Tp2/(Kp2*tc2+Td2);
+Ti2_pid = min(Tp2, 4*(tc2+Td2));
+
+%% cA plots
+
+%cA plots
+
+figure(1)
+plot(Test1.T.time, Test1.cA.data,'k','LineWidth',2)
+hold on
+plot(Test1.T.time, Test1.cA_SP,'b','LineWidth',2)
+plot(Test2.T.time, Test2.cA.data,'r','LineWidth',2)
+grid on
+xlabel('Time [sec]','FontSize', 12)
+ylabel('Tank concentration [mol/L]','FontSize', 12)
+hold off
+
+%Temperature with cA
+figure(2)
+plot(Test1.cA.time, Test1.T.data,'r','LineWidth',2)
+hold on
+plot(Test2.cA.time, Test2.T.data,'k','LineWidth',2)
+grid on
+xlabel('Time [sec]','FontSize', 12)
+ylabel('Tank Temperature [K]','FontSize', 12)
+hold off
+
+%Control Inputs
+figure(3)
+plot(Test1.cA.time, Test1.PI.data,'y','LineWidth',2)
+hold on
+plot(Test2.cA.time, Test2.PI.data,'k','LineWidth',2)
+grid on
+xlabel('Time [sec]','FontSize', 12)
+ylabel('Inlet flowrate q [L/min]','FontSize', 12)
+hold off
+
+%% Temperature plots
+
+%Temp plots
+figure(1)
+plot(Test1.T.time, Test1.T.data,'k','LineWidth',2)
+hold on
+plot(Test1.T.time, Test1.T_SP.data,'b','LineWidth',2)
+plot(Test2.T.time, Test2.T.data,'r','LineWidth',2)
+grid on
+xlabel('Time [sec]')
+ylabel('Tank Temperature [K]')
+hold off
+
+%cA plots
+figure(2)
+plot(Test1.cA.time, Test1.cA.data,'r','LineWidth',2)
+hold on
+plot(Test2.cA.time, Test2.cA.data,'k','LineWidth',2)
+grid on
+xlabel('Time [sec]')
+ylabel('Tank concentration [mol/L]')
+hold off
+
+%Control inputs
+figure(3)
+plot(Test1.cA.time, Test1.PI_T.data,'y','LineWidth',2)
+hold on
+plot(Test2.cA.time, Test2.PI_T.data,'k','LineWidth',2)
+grid on
+xlabel('Time [sec]')
+ylabel('Cooling jacket temperature [K]')
+hold off
